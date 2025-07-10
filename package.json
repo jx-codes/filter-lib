@@ -1,13 +1,16 @@
 {
-  "name": "react-filter-store",
-  "version": "1.0.0",
+  "name": "@jx/react-filter-store",
+  "version": "1.0.1",
   "description": "A reactive, observable filter store for React",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
     "types": "tsc",
     "prepare": "npm run types && npm run build",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "unpublish-library": "npm unpublish @jx/react-filter-store --force --registry http://localhost:4873",
+    "update-version": "npm version patch --force",
+    "publish-library": "npm run build && npm run update-version && npm run unpublish-library && npm publish --registry http://localhost:4873"
   },
   "keywords": [],
   "author": "",
