@@ -1,6 +1,6 @@
 {
   "name": "@jx/react-filter-store",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A reactive, observable filter store for React",
   "type": "module",
   "scripts": {
@@ -49,6 +49,7 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
-    "@legendapp/state": "3.0.0-beta.31"
+    "@legendapp/state": "3.0.0-beta.31",
+    "zustand": "^5.0.6"
   }
 }
