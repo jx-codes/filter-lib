@@ -1,5 +1,5 @@
 {
-  "name": "react-filter-store",
+  "name": "@jx/react-filter-store",
   "version": "1.0.3",
   "description": "A reactive, observable filter store for React",
   "type": "module",
@@ -8,7 +8,7 @@
     "types": "tsc",
     "prepare": "npm run types && npm run build",
     "lint": "eslint .",
-    "unpublish-library": "npm unpublish react-filter-store --force --registry http://localhost:4873",
+    "unpublish-library": "npm unpublish @jx/react-filter-store --force --registry http://localhost:4873",
     "update-version": "npm version patch --force",
     "publish-library": "npm run build && npm run update-version && npm publish --registry http://localhost:4873"
   },
