@@ -1,4 +1,4 @@
-import { observable, type Observable } from "@legendapp/state";
+import { create } from 'zustand';
 import {
   type FilterAST,
   type FilterNode,
@@ -6,281 +6,112 @@ import {
   type Rule,
 } from "./types";
 
+interface FilterStoreState {
+  filters: FilterAST;
+  
+  // Actions
+  addRule: (rule: Omit<Rule, "id">, parentId?: string) => void;
+  updateRule: (ruleId: string, rule: Partial<Rule>) => void;
+  addGroup: (group: Omit<Group, "id">, parentId?: string) => void;
+  updateGroup: (groupId: string, group: Partial<Omit<Group, "id" | "children">>) => void;
+  removeRule: (ruleId: string) => void;
+  removeGroup: (groupId: string) => void;
+  removeNode: (nodeId: string) => void;
+  getNode: (nodeId: string) => FilterNode | null;
+  getGroup: (groupId: string) => Group | null;
+  hasNode: (nodeId: string) => boolean;
+  getAllRules: () => Rule[];
+  getAllGroups: () => Group[];
+  toString: () => string;
+  toJSON: () => FilterAST;
+}
+
 /**
- * FilterStore provides a reactive, observable tree structure for managing filter rules and groups.
+ * FilterStore provides a reactive store for managing filter rules and groups using Zustand.
  * 
  * The filter tree is composed of groups (with combinators and children) and rules (field, op, value).
- * This class allows you to add, update, remove, and query rules and groups anywhere in the tree,
+ * This store allows you to add, update, remove, and query rules and groups anywhere in the tree,
  * and exposes a reactive state for UI binding.
  * 
  * Example usage:
  * 
- *   const store = new FilterStore();
- *   store.addRule({ field: "name", op: "eq", value: "Alice", component: "text" });
- *   store.addGroup({ combinator: "or", children: [] });
- *   store.updateRule(ruleId, { value: "Bob" });
- *   store.removeNode(nodeId);
- *   const allRules = store.getAllRules();
- *   const json = store.toJSON();
+ *   const useFilterStore = createFilterStore();
+ *   const { addRule, addGroup, updateRule, removeNode, getAllRules, toJSON } = useFilterStore();
+ *   
+ *   // Add a rule
+ *   addRule({ field: "name", op: "eq", value: "Alice", component: "text" });
+ *   
+ *   // Add a group
+ *   addGroup({ combinator: "or", children: [] });
+ *   
+ *   // Update a rule
+ *   updateRule(ruleId, { value: "Bob" });
+ *   
+ *   // Remove a node
+ *   removeNode(nodeId);
+ *   
+ *   // Get all rules
+ *   const allRules = getAllRules();
+ *   
+ *   // Export to JSON
+ *   const json = toJSON();
  */
-export class FilterStore {
-  /**
-   * The observable filter tree state.
-   * @private
-   */
-  private filters: Observable<FilterAST>;
-
-  /**
-   * Create a new FilterStore.
-   * @param initialState Optional initial filter tree. If not provided, creates a root group with no children.
-   */
-  constructor(initialState?: FilterAST) {
-    this.filters = observable(initialState ?? {
-        id: crypto.randomUUID(),
-        combinator: "and",
-        children: [],
-      },
-    );
-  }
-
-  /**
-   * Get the observable filter tree state.
-   * Useful for binding to UI or subscribing to changes.
-   */
-  public get state() {
-    return this.filters;
-  }
-
-  /**
-   * Recursively find a node (rule or group) by its ID in the filter tree.
-   * @param nodeId The ID of the node to find.
-   * @param nodes The list of nodes to search (defaults to root children).
-   * @returns The found FilterNode, or null if not found.
-   * @private
-   */
-  private findNodeById(
-    nodeId: string,
-    nodes: FilterNode[] = this.filters.children.peek(),
-  ): FilterNode | null {
-    for (const node of nodes) {
-      if (node.id === nodeId) {
-        return node;
-      }
-      if ("children" in node) {
-        const found = this.findNodeById(nodeId, node.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Recursively find a group by its ID in the filter tree.
-   * @param groupId The ID of the group to find.
-   * @param nodes The list of nodes to search (defaults to root children).
-   * @returns The found Group, or null if not found.
-   * @private
-   */
-  private findGroupById(
-    groupId: string,
-    nodes: FilterNode[] = this.filters.children.peek(),
-  ): Group | null {
-    for (const node of nodes) {
-      if (node.id === groupId && "children" in node) {
-        return node as Group;
-      }
-      if ("children" in node) {
-        const found = this.findGroupById(groupId, node.children);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Recursively update the filter tree by applying an update function to a node with a specific ID.
-   * If the update function returns null, the node is removed.
-   * @param nodes The list of nodes to update.
-   * @param targetId The ID of the node to update.
-   * @param updateFn The function to apply to the target node.
-   * @returns The updated list of nodes.
-   * @private
-   */
-  private updateTree(
-    nodes: FilterNode[],
-    targetId: string,
-    updateFn: (node: FilterNode) => FilterNode | null,
-  ): FilterNode[] {
-    return nodes
-      .map((node) => {
-        if (node.id === targetId) {
-          return updateFn(node);
+export const createFilterStore = (initialState?: FilterAST) => {
+  return create<FilterStoreState>((set, get) => {
+    // Helper functions
+    const findNodeById = (
+      nodeId: string,
+      nodes: FilterNode[] = get().filters.children,
+    ): FilterNode | null => {
+      for (const node of nodes) {
+        if (node.id === nodeId) {
+          return node;
         }
         if ("children" in node) {
-          return {
-            ...node,
-            children: this.updateTree(node.children, targetId, updateFn),
-          };
+          const found = findNodeById(nodeId, node.children);
+          if (found) return found;
         }
-        return node;
-      })
-      .filter((node): node is FilterNode => node !== null);
-  }
-
-  /**
-   * Add a new rule to the filter tree.
-   * If parentId is provided, adds the rule to the specified group; otherwise, adds to the root group.
-   * @param rule The rule to add (without an ID; one will be generated).
-   * @param parentId Optional ID of the parent group to add the rule to.
-   */
-  public addRule(rule: Omit<Rule, "id">, parentId?: string) {
-    const newRule: Rule = { ...rule, id: crypto.randomUUID() };
-    
-    if (parentId) {
-      const parent = this.findGroupById(parentId);
-      if (parent) {
-        this.filters.children.set(
-          this.updateTree(this.filters.children.peek(), parentId, (node) => {
-            if ("children" in node) {
-              return {
-                ...node,
-                children: [...node.children, newRule],
-              };
-            }
-            return node;
-          }),
-        );
       }
-    } else {
-      this.filters.children.push(newRule);
-    }
-  }
+      return null;
+    };
 
-  /**
-   * Update an existing rule anywhere in the filter tree.
-   * @param ruleId The ID of the rule to update.
-   * @param rule Partial rule properties to update.
-   */
-  public updateRule(ruleId: string, rule: Partial<Rule>) {
-    this.filters.children.set(
-      this.updateTree(this.filters.children.peek(), ruleId, (node) => {
-        if ("children" in node) {
-          return node; // Don't update groups
+    const findGroupById = (
+      groupId: string,
+      nodes: FilterNode[] = get().filters.children,
+    ): Group | null => {
+      for (const node of nodes) {
+        if (node.id === groupId && "children" in node) {
+          return node as Group;
         }
-        return { ...node, ...rule };
-      }),
-    );
-  }
-
-  /**
-   * Add a new group to the filter tree.
-   * If parentId is provided, adds the group to the specified parent group; otherwise, adds to the root group.
-   * @param group The group to add (without an ID; one will be generated).
-   * @param parentId Optional ID of the parent group to add the group to.
-   */
-  public addGroup(group: Omit<Group, "id">, parentId?: string) {
-    const newGroup: Group = { ...group, id: crypto.randomUUID() };
-    
-    if (parentId) {
-      const parent = this.findGroupById(parentId);
-      if (parent) {
-        this.filters.children.set(
-          this.updateTree(this.filters.children.peek(), parentId, (node) => {
-            if ("children" in node) {
-              return {
-                ...node,
-                children: [...node.children, newGroup],
-              };
-            }
-            return node;
-          }),
-        );
+        if ("children" in node) {
+          const found = findGroupById(groupId, node.children);
+          if (found) return found;
+        }
       }
-    } else {
-      this.filters.children.push(newGroup);
-    }
-  }
+      return null;
+    };
 
-  /**
-   * Update an existing group anywhere in the filter tree.
-   * Only updates group properties except "id" and "children".
-   * @param groupId The ID of the group to update.
-   * @param group Partial group properties to update (excluding "id" and "children").
-   */
-  public updateGroup(groupId: string, group: Partial<Omit<Group, "id" | "children">>) {
-    this.filters.children.set(
-      this.updateTree(this.filters.children.peek(), groupId, (node) => {
-        if ("children" in node) {
-          return { ...node, ...group };
-        }
-        return node; // Don't update rules
-      }),
-    );
-  }
+    const updateTree = (
+      nodes: FilterNode[],
+      targetId: string,
+      updateFn: (node: FilterNode) => FilterNode | null,
+    ): FilterNode[] => {
+      return nodes
+        .map((node) => {
+          if (node.id === targetId) {
+            return updateFn(node);
+          }
+          if ("children" in node) {
+            return {
+              ...node,
+              children: updateTree(node.children, targetId, updateFn),
+            };
+          }
+          return node;
+        })
+        .filter((node): node is FilterNode => node !== null);
+    };
 
-  /**
-   * Remove a rule from anywhere in the filter tree.
-   * @param ruleId The ID of the rule to remove.
-   */
-  public removeRule(ruleId: string) {
-    this.filters.children.set(
-      this.updateTree(this.filters.children.peek(), ruleId, () => null),
-    );
-  }
-
-  /**
-   * Remove a group from anywhere in the filter tree.
-   * All child rules and groups will also be removed.
-   * @param groupId The ID of the group to remove.
-   */
-  public removeGroup(groupId: string) {
-    this.filters.children.set(
-      this.updateTree(this.filters.children.peek(), groupId, () => null),
-    );
-  }
-
-  /**
-   * Remove any node (rule or group) from anywhere in the filter tree.
-   * @param nodeId The ID of the node to remove.
-   */
-  public removeNode(nodeId: string) {
-    this.filters.children.set(
-      this.updateTree(this.filters.children.peek(), nodeId, () => null),
-    );
-  }
-
-  /**
-   * Get a node (rule or group) by its ID from anywhere in the filter tree.
-   * @param nodeId The ID of the node to retrieve.
-   * @returns The FilterNode if found, or null.
-   */
-  public getNode(nodeId: string): FilterNode | null {
-    return this.findNodeById(nodeId);
-  }
-
-  /**
-   * Get a group by its ID from anywhere in the filter tree.
-   * @param groupId The ID of the group to retrieve.
-   * @returns The Group if found, or null.
-   */
-  public getGroup(groupId: string): Group | null {
-    return this.findGroupById(groupId);
-  }
-
-  /**
-   * Check if a node (rule or group) exists in the filter tree.
-   * @param nodeId The ID of the node to check.
-   * @returns True if the node exists, false otherwise.
-   */
-  public hasNode(nodeId: string): boolean {
-    return this.findNodeById(nodeId) !== null;
-  }
-
-  /**
-   * Get all rules from the entire filter tree as a flat array.
-   * @returns An array of all Rule objects in the tree.
-   */
-  public getAllRules(): Rule[] {
     const collectRules = (nodes: FilterNode[]): Rule[] => {
       const rules: Rule[] = [];
       for (const node of nodes) {
@@ -292,14 +123,7 @@ export class FilterStore {
       }
       return rules;
     };
-    return collectRules(this.filters.children.peek());
-  }
 
-  /**
-   * Get all groups from the entire filter tree as a flat array.
-   * @returns An array of all Group objects in the tree.
-   */
-  public getAllGroups(): Group[] {
     const collectGroups = (nodes: FilterNode[]): Group[] => {
       const groups: Group[] = [];
       for (const node of nodes) {
@@ -310,22 +134,173 @@ export class FilterStore {
       }
       return groups;
     };
-    return collectGroups(this.filters.children.peek());
-  }
 
-  /**
-   * Get a pretty-printed JSON string representation of the filter tree.
-   * @returns The filter tree as a formatted JSON string.
-   */
-  public toString() {
-    return JSON.stringify(this.filters.peek(), null, 2);
-  }
+    return {
+      filters: initialState ?? {
+        id: crypto.randomUUID(),
+        combinator: "and",
+        children: [],
+      },
 
-  /**
-   * Get the current filter tree as a plain JavaScript object.
-   * @returns The filter tree as a FilterAST object.
-   */
-  public toJSON(): FilterAST {
-    return this.filters.peek();
-  }
-}
+      addRule: (rule: Omit<Rule, "id">, parentId?: string) => {
+        const newRule: Rule = { ...rule, id: crypto.randomUUID() };
+        
+        set((state) => {
+          if (parentId) {
+            const parent = findGroupById(parentId, state.filters.children);
+            if (parent) {
+              return {
+                ...state,
+                filters: {
+                  ...state.filters,
+                  children: updateTree(state.filters.children, parentId, (node) => {
+                    if ("children" in node) {
+                      return {
+                        ...node,
+                        children: [...node.children, newRule],
+                      };
+                    }
+                    return node;
+                  }),
+                },
+              };
+            }
+            return state;
+          } else {
+            return {
+              ...state,
+              filters: {
+                ...state.filters,
+                children: [...state.filters.children, newRule],
+              },
+            };
+          }
+        });
+      },
+
+      updateRule: (ruleId: string, rule: Partial<Rule>) => {
+        set((state) => ({
+          ...state,
+          filters: {
+            ...state.filters,
+            children: updateTree(state.filters.children, ruleId, (node) => {
+              if ("children" in node) {
+                return node; // Don't update groups
+              }
+              return { ...node, ...rule };
+            }),
+          },
+        }));
+      },
+
+      addGroup: (group: Omit<Group, "id">, parentId?: string) => {
+        const newGroup: Group = { ...group, id: crypto.randomUUID() };
+        
+        set((state) => {
+          if (parentId) {
+            const parent = findGroupById(parentId, state.filters.children);
+            if (parent) {
+              return {
+                ...state,
+                filters: {
+                  ...state.filters,
+                  children: updateTree(state.filters.children, parentId, (node) => {
+                    if ("children" in node) {
+                      return {
+                        ...node,
+                        children: [...node.children, newGroup],
+                      };
+                    }
+                    return node;
+                  }),
+                },
+              };
+            }
+            return state;
+          } else {
+            return {
+              ...state,
+              filters: {
+                ...state.filters,
+                children: [...state.filters.children, newGroup],
+              },
+            };
+          }
+        });
+      },
+
+      updateGroup: (groupId: string, group: Partial<Omit<Group, "id" | "children">>) => {
+        set((state) => ({
+          ...state,
+          filters: {
+            ...state.filters,
+            children: updateTree(state.filters.children, groupId, (node) => {
+              if ("children" in node) {
+                return { ...node, ...group };
+              }
+              return node; // Don't update rules
+            }),
+          },
+        }));
+      },
+
+      removeRule: (ruleId: string) => {
+        set((state) => ({
+          ...state,
+          filters: {
+            ...state.filters,
+            children: updateTree(state.filters.children, ruleId, () => null),
+          },
+        }));
+      },
+
+      removeGroup: (groupId: string) => {
+        set((state) => ({
+          ...state,
+          filters: {
+            ...state.filters,
+            children: updateTree(state.filters.children, groupId, () => null),
+          },
+        }));
+      },
+
+      removeNode: (nodeId: string) => {
+        set((state) => ({
+          ...state,
+          filters: {
+            ...state.filters,
+            children: updateTree(state.filters.children, nodeId, () => null),
+          },
+        }));
+      },
+
+      getNode: (nodeId: string) => {
+        return findNodeById(nodeId, get().filters.children);
+      },
+
+      getGroup: (groupId: string) => {
+        return findGroupById(groupId, get().filters.children);
+      },
+
+      hasNode: (nodeId: string) => {
+        return findNodeById(nodeId, get().filters.children) !== null;
+      },
+
+      getAllRules: () => {
+        return collectRules(get().filters.children);
+      },
+
+      getAllGroups: () => {
+        return collectGroups(get().filters.children);
+      },
+
+      toString: () => {
+        return JSON.stringify(get().filters, null, 2);
+      },
+
+      toJSON: () => {
+        return get().filters;
+      },
+    };
+  });
+};
