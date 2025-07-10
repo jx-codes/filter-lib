@@ -13,7 +13,7 @@ export interface Rule {
 
 export interface Group {
   id: string;
-  combinator: "and" | "or" | "not";
+  combinator: "and" | "or";
   children: FilterNode[];
 }
 
