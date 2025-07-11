@@ -1,7 +1,7 @@
 import { Observable, observable } from "@legendapp/state";
 import { use$ } from "@legendapp/state/react";
 import { FilterAST, FilterNode, Rule, Group } from "./types";
-import { createInitialFilterState, FilterConfig } from "./helpers";
+import { FilterConfig, makeFilterRoot } from "./helpers";
 import { useMemo } from "react";
 
 const isRule = (node: FilterNode): node is Rule => !("children" in node);
@@ -14,7 +14,7 @@ export const createFilterStore = (args: {
   const { initialState, filterFields } = args;
 
   const filters = observable({
-    filters: initialState ?? createInitialFilterState(filterFields),
+    filters: initialState ?? makeFilterRoot(),
     fields: filterFields,
   });
 

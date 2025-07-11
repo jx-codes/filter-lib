@@ -12,7 +12,7 @@ import {
  * @param {("and" | "or")} [combinator="and"] - The logical combinator for the group ("and" or "or").
  * @returns {Group} The root group node with a unique id and empty children.
  */
-function makeFilterRoot(combinator: "and" | "or" = "and"): Group {
+export function makeFilterRoot(combinator: "and" | "or" = "and"): Group {
   return { id: crypto.randomUUID(), combinator, children: [] };
 }
 
