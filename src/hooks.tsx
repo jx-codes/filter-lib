@@ -3,20 +3,26 @@ import { createContext, useContext, useState } from "react";
 import { createInitialFilterState, FilterConfig } from "./helpers";
 import { FilterAST, FilterNode, Rule } from "./types";
 
-const FilterStoreContext =
-  createContext<ReturnType<typeof createFilterStore>>(createFilterStore());
+const FilterStoreContext = createContext<ReturnType<typeof createFilterStore>>(
+  createFilterStore({
+    filterFields: { fields: [] },
+  })
+);
 
-export const FilterStoreProvider = <ComponentKey extends string>({
+export const FilterStoreProvider = ({
   children,
   config,
   initialState,
 }: {
   children: React.ReactNode;
-  config: FilterConfig<ComponentKey>;
+  config: FilterConfig;
   initialState?: FilterAST;
 }) => {
   const [store] = useState(() =>
-    createFilterStore(initialState ?? createInitialFilterState(config))
+    createFilterStore({
+      initialState: initialState ?? createInitialFilterState(config),
+      filterFields: config,
+    })
   );
 
   return (
@@ -28,7 +34,7 @@ export const FilterStoreProvider = <ComponentKey extends string>({
 
 export const useFilterRuleById = (id: string) => {
   const store = useContext(FilterStoreContext);
-  const { getNode } = store();
+  const { getNode } = store;
   const rule = getNode(id);
 
   if (rule && "children" in rule) {
@@ -39,7 +45,7 @@ export const useFilterRuleById = (id: string) => {
 
 export const useFilterGroupById = (id: string) => {
   const store = useContext(FilterStoreContext);
-  const { getNode } = store();
+  const { getNode } = store;
   const group = getNode(id);
   if (group && !("children" in group)) {
     throw new Error("useFilterGroupById is only available for groups");

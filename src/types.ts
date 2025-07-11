@@ -1,5 +1,5 @@
 export type Primitive = string | number | boolean | Date | null;
-export type Op = "eq" | "contains" | "lt" | "gt" | (string & {});
+export type Op = "eq" | "contains" | "lt" | "gt" | "lte" | "gte" | "ne" | "in" | "nin" | (string & {});
 export type FilterNode = Rule | Group;
 
 export interface Rule {
@@ -7,8 +7,8 @@ export interface Rule {
   field: string;
   op: Op;
   value: Primitive | Primitive[];
-  meta?: Record<string, unknown>;
   component: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface Group {
@@ -19,16 +19,8 @@ export interface Group {
 
 export type FilterAST = Group;
 
-export type DefaultComponentType =
-  | "text"
-  | "number"
-  | "date"
-  | "datetime"
-  | "select"
-  | "boolean"
-  | "multiselect";
-
-export const defaultOperations: Record<DefaultComponentType, Op[]> = {
+// Default operations for common component types
+export const defaultOperations: Record<string, Op[]> = {
   text: ["eq", "contains", "ne"],
   number: ["eq", "ne", "lt", "gt", "lte", "gte"],
   date: ["eq", "ne", "lt", "gt", "lte", "gte"],
@@ -37,11 +29,3 @@ export const defaultOperations: Record<DefaultComponentType, Op[]> = {
   boolean: ["eq", "ne"],
   multiselect: ["in", "nin"],
 } as const;
-
-export type CustomComponentTypes<ComponentKey extends string> = Exclude<
-  ComponentKey,
-  DefaultComponentType
->;
-
-export type HasCustomComponents<ComponentKey extends string> =
-  CustomComponentTypes<ComponentKey> extends never ? false : true;

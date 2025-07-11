@@ -1,10 +1,7 @@
 import {
-  CustomComponentTypes,
-  DefaultComponentType,
   defaultOperations,
   FilterAST,
   Group,
-  HasCustomComponents,
   Op,
   Rule,
 } from "./types";
@@ -20,6 +17,38 @@ function makeFilterRoot(combinator: "and" | "or" = "and"): Group {
 }
 
 /**
+ * Configuration for a single filter field.
+ *
+ * @property {string} field - The field name (key in the data).
+ * @property {string} label - The display label for the field.
+ * @property {string} component - The component type identifier for the field.
+ * @property {Op[]} [operations] - The allowed operations for this field (overrides defaults).
+ * @property {Array<{ value: string; label: string }>} [options] - Options for select/multiselect fields.
+ * @property {Op} [defaultOp] - The default operation for this field.
+ * @property {Record<string, unknown>} [meta] - Additional metadata for the field.
+ */
+export interface FilterFieldConfig {
+  field: string;
+  label: string;
+  component: string;
+  operations?: Op[];
+  options?: Array<{ value: string; label: string }>;
+  defaultOp?: Op;
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * The main filter configuration type.
+ *
+ * @property {FilterFieldConfig[]} fields - The list of filterable fields.
+ * @property {Record<string, Op[]>} [defaultOperations] - Optional override for default operations per component type.
+ */
+export interface FilterConfig {
+  fields: FilterFieldConfig[];
+  defaultOperations?: Record<string, Op[]>;
+}
+
+/**
  * Initializes the filter state tree (AST) based on the provided filter configuration.
  *
  * For each field in the config, creates a rule node with:
@@ -29,22 +58,19 @@ function makeFilterRoot(combinator: "and" | "or" = "and"): Group {
  *   - the initial value (empty array for "multiselect", otherwise null),
  *   - the component type.
  *
- * @template ComponentKey - The string union of all component types (default and custom).
- * @param {FilterConfig<ComponentKey>} config - The filter configuration describing fields, operations, and renderers.
+ * @param {FilterConfig} config - The filter configuration describing fields and operations.
  * @returns {FilterAST} The initialized filter AST (root group with child rules).
  */
-export const createInitialFilterState = <ComponentKey extends string>(
-  config: FilterConfig<ComponentKey>
+export const createInitialFilterState = (
+  config: FilterConfig
 ): FilterAST => {
   const root = makeFilterRoot();
   root.children = config.fields.map((field) => {
     const initialValue = field.component === "multiselect" ? [] : null;
     const defaultOp =
       field.defaultOp ??
-      config.defaultOperations?.[
-        field.component as DefaultComponentType
-      ]?.[0] ??
-      defaultOperations[field.component as DefaultComponentType]?.[0] ??
+      config.defaultOperations?.[field.component]?.[0] ??
+      defaultOperations[field.component]?.[0] ??
       "eq";
 
     return {
@@ -57,129 +83,3 @@ export const createInitialFilterState = <ComponentKey extends string>(
   });
   return root;
 };
-
-/**
- * Configuration for a single filter field.
- *
- * @template ComponentKey - The string union of all component types (default and custom).
- * @property {string} field - The field name (key in the data).
- * @property {string} label - The display label for the field.
- * @property {ComponentKey} component - The component type for the field (e.g., "text", "number", custom).
- * @property {Op[]} [operations] - The allowed operations for this field (overrides defaults).
- * @property {Array<{ value: string; label: string }>} [options] - Options for select/multiselect fields.
- * @property {Op} [defaultOp] - The default operation for this field.
- * @property {Record<string, unknown>} [meta] - Additional metadata for the field.
- */
-export interface FilterFieldConfig<ComponentKey extends string> {
-  field: string;
-  label: string;
-  component: ComponentKey;
-  operations?: Op[];
-  options?: Array<{ value: string; label: string }>;
-  defaultOp?: Op;
-  meta?: Record<string, unknown>;
-}
-
-/**
- * Props for a custom or default filter display renderer component.
- *
- * @template ComponentKey - The string union of all component types (default and custom).
- * @property {Rule} rule - The rule node to display.
- * @property {() => void} onRemove - Callback to remove the rule.
- * @property {FilterFieldConfig<ComponentKey>} config - The field configuration for this rule.
- */
-export interface FilterDisplayRendererProps<ComponentKey extends string> {
-  rule: Rule;
-  onRemove: () => void;
-  config: FilterFieldConfig<ComponentKey>;
-}
-
-/**
- * Props for a custom or default filter input renderer component.
- *
- * @template ComponentKey - The string union of all component types (default and custom).
- * @property {string} value - The current value of the input.
- * @property {(value: string) => void} onChange - Callback when the value changes.
- * @property {FilterFieldConfig<ComponentKey>} config - The field configuration for this input.
- * @property {string} [placeholder] - Optional placeholder text for the input.
- */
-export interface FilterInputRendererProps<ComponentKey extends string> {
-  value: string;
-  onChange: (value: string) => void;
-  config: FilterFieldConfig<ComponentKey>;
-  placeholder?: string;
-}
-
-/**
- * Base configuration for the filter system.
- *
- * @template ComponentKey - The string union of all component types (default and custom).
- * @property {FilterFieldConfig<ComponentKey>[]} fields - The list of filterable fields.
- * @property {Record<string, Op[]>} [defaultOperations] - Optional override for default operations per component type.
- */
-interface BaseFilterConfig<ComponentKey extends string> {
-  fields: FilterFieldConfig<ComponentKey>[];
-  defaultOperations?: Record<string, Op[]>;
-}
-
-/**
- * The main filter configuration type.
- *
- * If custom components are present, requires explicit displayRenderers and inputRenderers for custom types,
- * and allows partial overrides for default types. Otherwise, only partial overrides for default types are allowed.
- *
- * @template ComponentKey - The string union of all component types (default and custom).
- */
-export type FilterConfig<ComponentKey extends string> =
-  BaseFilterConfig<ComponentKey> &
-    (HasCustomComponents<ComponentKey> extends true
-      ? {
-          /**
-           * Mapping of custom and default component types to their display renderer components.
-           * Custom types are required, default types are optional.
-           */
-          displayRenderers: Record<
-            CustomComponentTypes<ComponentKey>,
-            React.ComponentType<FilterDisplayRendererProps<ComponentKey>>
-          > &
-            Partial<
-              Record<
-                DefaultComponentType,
-                React.ComponentType<FilterDisplayRendererProps<ComponentKey>>
-              >
-            >;
-          /**
-           * Mapping of custom and default component types to their input renderer components.
-           * Custom types are required, default types are optional.
-           */
-          inputRenderers: Record<
-            CustomComponentTypes<ComponentKey>,
-            React.ComponentType<FilterInputRendererProps<ComponentKey>>
-          > &
-            Partial<
-              Record<
-                DefaultComponentType,
-                React.ComponentType<FilterInputRendererProps<ComponentKey>>
-              >
-            >;
-        }
-      : {
-          /**
-           * Optional mapping of default component types to their display renderer components.
-           */
-          displayRenderers?: Partial<
-            Record<
-              DefaultComponentType,
-              React.ComponentType<FilterDisplayRendererProps<ComponentKey>>
-            >
-          >;
-          /**
-           * Optional mapping of default component types to their input renderer components.
-           */
-          inputRenderers?: Partial<
-            Record<
-              DefaultComponentType,
-              React.ComponentType<FilterInputRendererProps<ComponentKey>>
-            >
-          >;
-        });
