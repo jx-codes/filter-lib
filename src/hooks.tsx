@@ -52,3 +52,7 @@ export const useFilterGroupById = (id: string) => {
   }
   return group;
 };
+
+export const useFilterStoreContext = () => {
+  return useContext(FilterStoreContext);
+};
