@@ -1,6 +1,6 @@
 {
   "name": "@jx/react-filter-store",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "A reactive, observable filter store for React",
   "type": "module",
   "scripts": {
